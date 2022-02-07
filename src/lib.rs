@@ -1,4 +1,5 @@
 
+extern crate websocket;
 extern crate rouille;
 
 use std::process::Command;
@@ -9,9 +10,12 @@ use std::collections::HashMap;
 use chrono::{DateTime, Utc, TimeZone};
 
 pub mod helix;
+pub mod irc;
 mod constants;
 
-#[derive(Debug)]
+
+
+#[derive(Debug, Clone)]
 pub struct Auth {
     pub client_id: String,
     pub client_secret: String,
@@ -26,6 +30,7 @@ impl Auth {
         Utc::now() >= self.expires_at
     }
 }
+
 impl From<JsonAuth> for Auth {
     fn from(json_auth: JsonAuth) -> Self {
         Auth {
@@ -39,10 +44,7 @@ impl From<JsonAuth> for Auth {
     }
 }
 
-pub struct Twitch {
-    pub auth: Auth,
-    pub req: reqwest::blocking::Client,
-}
+
 
 #[derive(Deserialize, Serialize)]
 struct JsonAuth {
@@ -53,6 +55,7 @@ struct JsonAuth {
     refresh_token: String,
     expires_at: i64,
 }
+
 impl From<&Auth> for JsonAuth {
     fn from(auth: &Auth) -> Self {
         JsonAuth {
@@ -66,8 +69,12 @@ impl From<&Auth> for JsonAuth {
     }
 }
 
+
+pub struct Twitch {
+    pub auth: Auth,
+    pub req: reqwest::blocking::Client,
+}
 impl Twitch {
-    
     pub fn new() -> Self {
         let json = std::fs::read_to_string("twitch.json").unwrap_or(String::new());
         let parsed: JsonAuth = serde_json::from_str(&json).unwrap_or_else(|_| {
@@ -99,9 +106,9 @@ impl Twitch {
     }
     
     pub fn init_token(&mut self) {
-        // https://id.twitch.tv/oauth2/authorize?client_id=<CLIENT_ID>&redirect_uri=http://localhost:8000&response_type=code&scope=chat:edit%20chat:read
+        // https://id.twitch.tv/oauth2/authorize?client_id=<CLIENT_ID>&redirect_uri=http://localhost:8000&response_type=code&scope=chat:edit chat:read
         let cli_id = self.auth.client_id.clone();
-        std::fs::write("/tmp/twitch.php", format!("<?php echo \"Get token <a href='https://id.twitch.tv/oauth2/authorize?client_id={}&redirect_uri=http://localhost:8000&response_type=code&scope=chat:edit%20chat:read'>here</a>.<br>Code: \"; echo $_GET['code'];", cli_id)).unwrap();
+        std::fs::write("/tmp/twitch.php", format!("<?php echo \"Get token <a href='https://id.twitch.tv/oauth2/authorize?client_id={}&redirect_uri=http://localhost:8000&response_type=code&scope=chat:read chat:edit'>here</a>.<br>Code: \"; echo $_GET['code'];", cli_id)).unwrap();
         rouille::start_server("localhost:8000", move |request| {
             let mut cmd = Command::new("php-cgi");
             cmd.arg("-n");
@@ -165,6 +172,8 @@ impl Twitch {
         std::fs::write("twitch.json", json).unwrap();
     }
 }
+
+
 
 #[derive(Deserialize, Debug)]
 struct Ip {
